@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react'
+import React, { useEffect } from 'react'
 import { Shield, MapPin, Users, FileText, Video, Mic, Share2, Star } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import AppShell from './components/AppShell'
 import RightsCard from './components/RightsCard'
 import RecordButton from './components/RecordButton'
@@ -7,22 +8,43 @@ import Modal from './components/Modal'
 import ScriptsSection from './components/ScriptsSection'
 import SubscriptionCard from './components/SubscriptionCard'
 import { detectUserLocation, generateRightsCard } from './services/api'
-import type { UserLocation, RightsCardData, SubscriptionTier } from './types'
+import { useAppStore } from './store'
+import './i18n' // Initialize i18n
 
 function App() {
-  const [userLocation, setUserLocation] = useState<UserLocation | null>(null)
-  const [rightsCard, setRightsCard] = useState<RightsCardData | null>(null)
-  const [subscriptionTier, setSubscriptionTier] = useState<SubscriptionTier>('free')
-  const [isRecording, setIsRecording] = useState(false)
-  const [showSubscriptionModal, setShowSubscriptionModal] = useState(false)
-  const [activeTab, setActiveTab] = useState<'rights' | 'scripts' | 'record' | 'share'>('rights')
-  const [isLoading, setIsLoading] = useState(true)
+  const { t, i18n } = useTranslation()
+  const {
+    userLocation,
+    rightsCard,
+    subscriptionTier,
+    isRecording,
+    showSubscriptionModal,
+    activeTab,
+    isLoading,
+    language,
+    setUserLocation,
+    setRightsCard,
+    setSubscriptionTier,
+    setRecording,
+    setShowSubscriptionModal,
+    setActiveTab,
+    setLoading,
+    setLanguage
+  } = useAppStore()
 
   useEffect(() => {
     initializeApp()
   }, [])
 
+  useEffect(() => {
+    // Sync i18n language with store
+    if (language !== i18n.language) {
+      i18n.changeLanguage(language)
+    }
+  }, [language, i18n])
+
   const initializeApp = async () => {
+    setLoading(true)
     try {
       // Detect user location
       const location = await detectUserLocation()
@@ -30,13 +52,13 @@ function App() {
       
       // Generate rights card for user's state
       if (location) {
-        const card = await generateRightsCard(location.state)
+        const card = await generateRightsCard(location.state, language)
         setRightsCard(card)
       }
     } catch (error) {
       console.error('Failed to initialize app:', error)
     } finally {
-      setIsLoading(false)
+      setLoading(false)
     }
   }
 
@@ -44,15 +66,28 @@ function App() {
     setShowSubscriptionModal(true)
   }
 
-  const handleSubscribe = (tier: SubscriptionTier) => {
+  const handleSubscribe = (tier: 'free' | 'pro') => {
     setSubscriptionTier(tier)
     setShowSubscriptionModal(false)
+  }
+
+  const handleLanguageChange = (newLanguage: 'en' | 'es') => {
+    setLanguage(newLanguage)
+    i18n.changeLanguage(newLanguage)
+    
+    // Regenerate rights card in new language
+    if (userLocation) {
+      generateRightsCard(userLocation.state, newLanguage)
+        .then(setRightsCard)
+        .catch(console.error)
+    }
   }
 
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white"></div>
+        <span className="ml-3 text-white">{t('common.loading')}</span>
       </div>
     )
   }
@@ -64,9 +99,33 @@ function App() {
         <div className="text-center space-y-4">
           <div className="flex items-center justify-center space-x-2">
             <Shield className="h-8 w-8 text-white" />
-            <h1 className="text-3xl font-bold text-white">Know My Rights AI</h1>
+            <h1 className="text-3xl font-bold text-white">{t('appName')}</h1>
           </div>
-          <p className="text-white/80 text-lg">Your pocket guide to legal empowerment</p>
+          <p className="text-white/80 text-lg">{t('tagline')}</p>
+          
+          {/* Language Switcher */}
+          <div className="flex items-center justify-center space-x-2">
+            <button
+              onClick={() => handleLanguageChange('en')}
+              className={`px-3 py-1 rounded text-sm ${
+                language === 'en' 
+                  ? 'bg-white text-gray-900' 
+                  : 'bg-white/20 text-white hover:bg-white/30'
+              }`}
+            >
+              EN
+            </button>
+            <button
+              onClick={() => handleLanguageChange('es')}
+              className={`px-3 py-1 rounded text-sm ${
+                language === 'es' 
+                  ? 'bg-white text-gray-900' 
+                  : 'bg-white/20 text-white hover:bg-white/30'
+              }`}
+            >
+              ES
+            </button>
+          </div>
           
           {userLocation && (
             <div className="flex items-center justify-center space-x-2 text-white/70">
@@ -80,10 +139,10 @@ function App() {
         <div className="flex justify-center">
           <div className="glass-effect rounded-lg p-1 flex space-x-1">
             {[
-              { id: 'rights', label: 'My Rights', icon: Shield },
-              { id: 'scripts', label: 'Scripts', icon: FileText },
-              { id: 'record', label: 'Record', icon: Video },
-              { id: 'share', label: 'Share', icon: Share2 }
+              { id: 'rights', label: t('nav.rights'), icon: Shield },
+              { id: 'scripts', label: t('nav.scripts'), icon: FileText },
+              { id: 'record', label: t('nav.record'), icon: Video },
+              { id: 'share', label: t('nav.share'), icon: Share2 }
             ].map(({ id, label, icon: Icon }) => (
               <button
                 key={id}
@@ -128,14 +187,14 @@ function App() {
           {activeTab === 'record' && (
             <div className="space-y-6">
               <div className="glass-effect rounded-xl p-6 text-center space-y-4">
-                <h3 className="text-xl font-semibold text-white">Incident Documentation</h3>
+                <h3 className="text-xl font-semibold text-white">{t('recording.title')}</h3>
                 <p className="text-white/80">
-                  Securely record and store evidence of interactions with law enforcement
+                  {t('recording.description')}
                 </p>
                 
                 <RecordButton
                   isRecording={isRecording}
-                  onToggleRecording={setIsRecording}
+                  onToggleRecording={setRecording}
                   isPro={subscriptionTier === 'pro'}
                   onUpgrade={handleUpgrade}
                 />
@@ -144,7 +203,7 @@ function App() {
                   <div className="bg-yellow-500/20 border border-yellow-500/30 rounded-lg p-4">
                     <p className="text-yellow-200 text-sm">
                       <Star className="h-4 w-4 inline mr-1" />
-                      Upgrade to Pro for unlimited recording and IPFS storage
+                      {t('subscription.upgradeForFeatures')}
                     </p>
                   </div>
                 )}
@@ -155,9 +214,9 @@ function App() {
           {activeTab === 'share' && rightsCard && (
             <div className="space-y-6">
               <div className="glass-effect rounded-xl p-6 space-y-4">
-                <h3 className="text-xl font-semibold text-white">Share Legal Knowledge</h3>
+                <h3 className="text-xl font-semibold text-white">{t('sharing.title')}</h3>
                 <p className="text-white/80">
-                  Help others in your community by sharing important rights information
+                  {t('sharing.description')}
                 </p>
                 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
